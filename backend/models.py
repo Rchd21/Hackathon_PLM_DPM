@@ -12,9 +12,9 @@ class Regulation(BaseModel):
     url: Optional[str]
     text: str
     previous_version_id: Optional[str] = None
-
-    domain: str = "automotive"
-    scope: str = "safety"
+    domain: str = "international"      # automotive, medical, etc.
+    scope: str = "product_safety"      # safety, cyber, environment...
+    source: str = "manual"             # "EURLEX", "FEDERAL_REGISTER", "OTHER"
 
 
 class Requirement(BaseModel):

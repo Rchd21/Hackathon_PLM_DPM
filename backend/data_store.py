@@ -147,3 +147,41 @@ class InMemoryDataStore:
             1.0 - len(non_compliant) / max(1, len(relevant_reqs))
         )
         return round(compliance_percent, 1), non_compliant
+    
+    def import_worldwide_by_topic(self, topic: str, us_limit: int = 5) -> None:
+        """
+        Exemple simple : on importe des textes pour plusieurs juridictions
+        autour d'un même sujet (ex: 'battery', 'airbag', 'cybersecurity').
+
+        Pour l'instant :
+        - USA : Federal Register par mot-clé
+        - EU : à toi de choisir les CELEX pertinents que tu veux surveiller
+        """
+        # 1) USA : Federal Register
+        us_regs = self.import_us_regulations_by_topic(topic, limit=us_limit)
+
+        # 2) EU : ici on peut faire une petite table de correspondance
+        #    sujet -> liste de CELEX à surveiller
+        topic_map = {
+            "battery": ["32023R1542"],
+            "batterie": ["32023R1542"],
+            "airbag": [],  # à remplir si tu trouves des CELEX spécifiques
+        }
+        celex_list = topic_map.get(topic.lower(), [])
+
+        eu_regs = []
+        for celex in celex_list:
+            try:
+                reg = self.import_eu_regulation(celex)
+                eu_regs.append(reg)
+            except Exception:
+                # on ignore les erreurs pour la démo
+                continue
+
+        # Tu pourrais ajouter ici d'autres sources (FR / JP / etc.)
+        # en appelant d'autres clients quand tu les auras créés.
+
+        return {
+            "US": us_regs,
+            "EU": eu_regs,
+        }

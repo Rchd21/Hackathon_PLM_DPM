@@ -7,8 +7,6 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-
-
 import streamlit as st
 import pandas as pd
 
@@ -33,9 +31,15 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
 # --- Sidebar navigation --- #
+# Les logos doivent être dans le même dossier que app.py, ou adapter le chemin si besoin
 st.sidebar.image("Logo-ESILV.jpg", use_container_width=True)
+try:
+    st.sidebar.image("Logo-Renault.jpg", use_container_width=True)
+except Exception:
+    # Si le logo Renault n'existe pas, on ignore l'erreur
+    pass
+
 st.sidebar.title("GPS Réglementaire")
 page = st.sidebar.radio(
     "Navigation",
@@ -45,11 +49,12 @@ page = st.sidebar.radio(
         "3️⃣ Graphe d'impact",
         "4️⃣ Dashboard de conformité",
         "5️⃣ Historique & traçabilité",
+        "6️⃣ Admin & Veille",
     ],
 )
 
-
 # --- Helpers UI --- #
+
 
 def show_regulation_selector():
     regs = store.list_regulations()
@@ -123,50 +128,34 @@ if page.startswith("1️⃣"):
                         st.text(reg.text)
 
         st.markdown("---")
-        st.markdown("### 🔗 Connexion à des sources réelles")
+        
 
         col_eu, col_us = st.columns(2)
 
-        with col_eu:
-            st.caption("Importer un texte UE (EUR-Lex / CELEX)")
-            celex_id = st.text_input(
-                "ID CELEX (ex: 32014R0535)",
-                key="celex_input",
-                placeholder="32014R0535",
-            )
-            if st.button("Importer depuis l'UE", key="btn_import_eu"):
-                if celex_id.strip():
-                    try:
-                        reg = store.import_eu_regulation(celex_id.strip())
-                        st.success(f"Importé : {reg.id} – {reg.title}")
-                        st.experimental_rerun()
-                    except Exception as e:
-                        st.error(f"Erreur lors de l'import UE : {e}")
-                else:
-                    st.warning("Merci de saisir un ID CELEX.")
 
-        with col_us:
-            st.caption("Importer des textes US (Federal Register)")
-            topic = st.text_input(
-                "Mot-clé (ex: airbag, battery…)",
-                key="us_topic_input",
-                placeholder="airbag",
-            )
-            limit = st.slider(
-                "Nombre de textes à importer", min_value=1, max_value=10, value=3
-            )
-            if st.button("Importer depuis les USA", key="btn_import_us"):
-                if topic.strip():
-                    try:
-                        regs = store.import_us_regulations_by_topic(
-                            topic.strip(), limit=limit
-                        )
-                        st.success(f"{len(regs)} textes US importés.")
-                        st.experimental_rerun()
-                    except Exception as e:
-                        st.error(f"Erreur lors de l'import US : {e}")
-                else:
-                    st.warning("Merci de saisir un mot-clé.")
+        # --- Import mondial par sujet --- #
+        st.markdown("---")
+        st.markdown("### 🌍 Import mondial par sujet")
+
+        topic_world = st.text_input(
+            "Sujet global (ex: battery, airbag, cybersecurity…)",
+            key="world_topic_input",
+            placeholder="battery",
+        )
+        if st.button("Importer dans plusieurs juridictions", key="btn_import_world"):
+            if topic_world.strip():
+                try:
+                    result = store.import_worldwide_by_topic(topic_world.strip())
+                    us_count = len(result.get("US", []))
+                    eu_count = len(result.get("EU", []))
+                    st.success(
+                        f"Import mondial terminé : {us_count} textes US, {eu_count} textes EU ajoutés."
+                    )
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur lors de l'import mondial : {e}")
+            else:
+                st.warning("Merci de saisir un sujet.")
 
 # --- Page 2 : Extraction d'exigences --- #
 
@@ -286,7 +275,25 @@ elif page.startswith("4️⃣"):
         st.markdown("### Vue globale par pays")
         rows = build_country_dashboard(store)
         df_dash = pd.DataFrame(rows)
-        st.dataframe(df_dash, use_container_width=True)
+
+        if df_dash.empty:
+            st.info("Aucune donnée de conformité disponible pour l'instant.")
+        else:
+            # Tableau récapitulatif
+            st.dataframe(df_dash, use_container_width=True)
+
+            # Petit graphe de conformité par pays
+            st.markdown("### 📊 Conformité par pays")
+            chart_data = df_dash.set_index("Pays")["Conformité (%)"]
+            st.bar_chart(chart_data)
+
+            # Résumé global
+            avg_conf = round(df_dash["Conformité (%)"].mean(), 1)
+            high_risk = df_dash[df_dash["Risque"] == "Élevé"]["Pays"].tolist()
+            st.markdown(
+                f"- **Conformité moyenne globale :** {avg_conf} %  \n"
+                f"- **Pays à risque élevé :** {', '.join(high_risk) if high_risk else 'aucun'}"
+            )
 
         st.markdown("### Détail par pays")
         countries = [r["Pays"] for r in rows]
@@ -309,7 +316,9 @@ elif page.startswith("4️⃣"):
                 df_actions = pd.DataFrame(actions)
                 st.dataframe(df_actions, use_container_width=True)
             else:
-                st.info("Aucune action recommandée (toutes les exigences connues sont couvertes).")
+                st.info(
+                    "Aucune action recommandée (toutes les exigences connues sont couvertes)."
+                )
 
         st.markdown("---")
         st.markdown("### Produit couvert")
@@ -350,3 +359,65 @@ elif page.startswith("5️⃣"):
         "Dans un vrai projet, cette page permettrait de justifier chaque décision "
         "face à un auditeur : qui a modifié quoi, quand, et pourquoi."
     )
+
+# --- Page 6 : Admin & Veille --- #
+
+elif page.startswith("6️⃣"):
+    st.title("6️⃣ Administration & Veille mondiale")
+
+    st.markdown(
+        "Cette page permet de lancer manuellement des campagnes de veille "
+        "sur plusieurs juridictions à la fois."
+    )
+
+    st.markdown("### 🌍 Lancer une veille par sujet")
+
+    topic_world = st.text_input(
+        "Sujet global (ex: battery, airbag, cybersecurity…)",
+        key="admin_world_topic",
+        placeholder="battery",
+    )
+    us_limit = st.slider(
+        "Nombre de textes US à importer",
+        min_value=1,
+        max_value=20,
+        value=5,
+        key="admin_world_us_limit",
+    )
+
+    if st.button("🚀 Lancer la veille mondiale maintenant"):
+        if topic_world.strip():
+            try:
+                result = store.import_worldwide_by_topic(
+                    topic_world.strip(), us_limit=us_limit
+                )
+                us_count = len(result.get("US", []))
+                eu_count = len(result.get("EU", []))
+                st.success(
+                    f"Veille terminée : {us_count} textes US, {eu_count} textes EU importés."
+                )
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erreur lors de la veille mondiale : {e}")
+        else:
+            st.warning("Merci de saisir un sujet avant de lancer la veille.")
+
+    st.markdown("---")
+    st.markdown("### 🔎 Textes actuellement connus (toutes juridictions)")
+    regs = store.list_regulations()
+    if regs:
+        df_all = pd.DataFrame(
+            [
+                {
+                    "ID": r.id,
+                    "Pays": r.country,
+                    "Source": getattr(r, "source", "inconnu"),
+                    "Titre": r.title[:80] + ("..." if len(r.title) > 80 else ""),
+                    "Date": r.date.date(),
+                }
+                for r in regs
+            ]
+        )
+        st.dataframe(df_all, use_container_width=True)
+    else:
+        st.info("Aucun texte enregistré pour l'instant.")

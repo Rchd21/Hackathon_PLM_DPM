@@ -71,3 +71,15 @@ def extract_requirements_from_regulation(
         counter += 1
 
     return requirements
+
+def extract_requirements_with_ai_fallback(
+    regulation: Regulation,
+    start_index: int = 1,
+) -> List[Requirement]:
+    """
+    Point d'entrée 'IA-ready' pour l'extraction :
+    - aujourd'hui : utilise les règles simples (is_requirement_sentence, etc.)
+    - demain : pourra appeler un LLM externe pour enrichir / corriger.
+    """
+    # Pour l'instant, on réutilise simplement la logique existante.
+    return extract_requirements_from_regulation(regulation, start_index=start_index)
