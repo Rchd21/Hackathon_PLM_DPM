@@ -1,11 +1,24 @@
+import os
+import sys
+
+# Ajoute la racine du projet au PYTHONPATH,
+# même si tu lances "streamlit run frontend/app.py" depuis le dossier frontend.
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+
+
 import streamlit as st
 import pandas as pd
 
 from backend.data_store import InMemoryDataStore
 from backend.nlp_extractor import extract_requirements_from_regulation
 from backend.impact_engine import infer_impacts_for_requirement
-from backend.dashboard_utils import build_country_dashboard
-
+from backend.dashboard_utils import (
+    build_country_dashboard,
+    build_actions_for_country,
+)
 
 # --- Initialisation du store en session --- #
 
@@ -40,6 +53,10 @@ page = st.sidebar.radio(
 
 def show_regulation_selector():
     regs = store.list_regulations()
+    if not regs:
+        st.info("Aucun texte réglementaire connu pour l'instant.")
+        return None
+
     options = {f"{r.country} - {r.title} (v{r.version})": r.id for r in regs}
     label = st.selectbox("Choisir un texte réglementaire", list(options.keys()))
     return store.get_regulation(options[label])
@@ -57,27 +74,30 @@ if page.startswith("1️⃣"):
 
     with col_list:
         regs = store.list_regulations()
-        df = pd.DataFrame(
-            [
-                {
-                    "ID": r.id,
-                    "Pays": r.country,
-                    "Titre": r.title,
-                    "Version": r.version,
-                    "Date": r.date.date(),
-                    "Version précédente": r.previous_version_id,
-                }
-                for r in regs
-            ]
-        )
-        st.subheader("Textes surveillés")
-        st.dataframe(df, use_container_width=True)
+        if regs:
+            df = pd.DataFrame(
+                [
+                    {
+                        "ID": r.id,
+                        "Pays": r.country,
+                        "Titre": r.title,
+                        "Version": r.version,
+                        "Date": r.date.date(),
+                        "Version précédente": r.previous_version_id,
+                    }
+                    for r in regs
+                ]
+            )
+            st.subheader("Textes surveillés")
+            st.dataframe(df, use_container_width=True)
+        else:
+            st.info("Aucun texte réglementaire pour l'instant.")
 
     with col_detail:
         st.subheader("Détail d'un texte")
         reg = show_regulation_selector()
         if reg:
-            st.markdown(f"*ID :* {reg.id}")
+            st.markdown(f"*ID :* `{reg.id}`")
             st.markdown(f"*Pays :* {reg.country}")
             st.markdown(f"*Version :* {reg.version}")
             st.markdown(f"*Date :* {reg.date.date()}")
@@ -90,7 +110,10 @@ if page.startswith("1️⃣"):
                 prev = store.get_regulation(reg.previous_version_id)
                 if prev:
                     st.markdown("### Diff simplifiée avec la version précédente")
-                    st.write("⚠ Démo : on affiche juste les deux textes côte à côte.")
+                    st.write(
+                        "⚠ Démo : on affiche juste les deux textes côte à côte "
+                        "(dans un vrai produit on ferait un diff plus intelligent)."
+                    )
                     col_prev, col_new = st.columns(2)
                     with col_prev:
                         st.caption(f"Version précédente ({prev.version})")
@@ -98,6 +121,52 @@ if page.startswith("1️⃣"):
                     with col_new:
                         st.caption(f"Version actuelle ({reg.version})")
                         st.text(reg.text)
+
+        st.markdown("---")
+        st.markdown("### 🔗 Connexion à des sources réelles")
+
+        col_eu, col_us = st.columns(2)
+
+        with col_eu:
+            st.caption("Importer un texte UE (EUR-Lex / CELEX)")
+            celex_id = st.text_input(
+                "ID CELEX (ex: 32014R0535)",
+                key="celex_input",
+                placeholder="32014R0535",
+            )
+            if st.button("Importer depuis l'UE", key="btn_import_eu"):
+                if celex_id.strip():
+                    try:
+                        reg = store.import_eu_regulation(celex_id.strip())
+                        st.success(f"Importé : {reg.id} – {reg.title}")
+                        st.experimental_rerun()
+                    except Exception as e:
+                        st.error(f"Erreur lors de l'import UE : {e}")
+                else:
+                    st.warning("Merci de saisir un ID CELEX.")
+
+        with col_us:
+            st.caption("Importer des textes US (Federal Register)")
+            topic = st.text_input(
+                "Mot-clé (ex: airbag, battery…)",
+                key="us_topic_input",
+                placeholder="airbag",
+            )
+            limit = st.slider(
+                "Nombre de textes à importer", min_value=1, max_value=10, value=3
+            )
+            if st.button("Importer depuis les USA", key="btn_import_us"):
+                if topic.strip():
+                    try:
+                        regs = store.import_us_regulations_by_topic(
+                            topic.strip(), limit=limit
+                        )
+                        st.success(f"{len(regs)} textes US importés.")
+                        st.experimental_rerun()
+                    except Exception as e:
+                        st.error(f"Erreur lors de l'import US : {e}")
+                else:
+                    st.warning("Merci de saisir un mot-clé.")
 
 # --- Page 2 : Extraction d'exigences --- #
 
@@ -137,6 +206,8 @@ elif page.startswith("2️⃣"):
             st.dataframe(df_reqs, use_container_width=True)
         else:
             st.info("Aucune exigence extraite pour ce texte pour l'instant.")
+    else:
+        st.info("Commence par importer / sélectionner un texte sur la page 1.")
 
 # --- Page 3 : Graphe d'impact --- #
 
@@ -155,7 +226,7 @@ elif page.startswith("3️⃣"):
         req = store.requirements[req_id]
 
         st.markdown("### Détail de l'exigence")
-        st.write(f"*ID :* {req.id}")
+        st.write(f"*ID :* `{req.id}`")
         st.write(f"*Pays :* {req.country}")
         st.write(f"*Texte :* {req.text_engineering}")
 
@@ -174,19 +245,18 @@ elif page.startswith("3️⃣"):
                 st.caption("Composants impactés")
                 for c_id in impact.components:
                     comp = store.components.get(c_id)
-                    st.write(f"- {c_id} – {comp.name if comp else ''}")
+                    st.write(f"- `{c_id}` – {comp.name if comp else ''}")
 
             with col_t:
                 st.caption("Tests requis")
                 for t_id in impact.tests:
                     test = store.tests.get(t_id)
-                    st.write(f"- {t_id} – {test.name if test else ''}")
+                    st.write(f"- `{t_id}` – {test.name if test else ''}")
 
             with col_d:
                 st.caption("Documents associés")
                 for doc in impact.documents:
-                    st.write(f"- {doc}")
-
+                    st.write(f"- `{doc}`")
         else:
             st.info("Aucun impact calculé pour cette exigence pour l'instant.")
 
@@ -229,9 +299,17 @@ elif page.startswith("4️⃣"):
                 st.error(f"{len(nonconf)} exigences non conformes :")
                 for req_id in nonconf:
                     r = store.requirements[req_id]
-                    st.markdown(f"- {req_id} – {r.text_engineering}")
+                    st.markdown(f"- `{req_id}` – {r.text_engineering}")
             else:
                 st.success("Aucune exigence non conforme détectée pour ce pays.")
+
+            st.markdown("### Actions recommandées")
+            actions = build_actions_for_country(store, country)
+            if actions:
+                df_actions = pd.DataFrame(actions)
+                st.dataframe(df_actions, use_container_width=True)
+            else:
+                st.info("Aucune action recommandée (toutes les exigences connues sont couvertes).")
 
         st.markdown("---")
         st.markdown("### Produit couvert")

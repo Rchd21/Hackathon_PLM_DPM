@@ -1,7 +1,8 @@
 from typing import Dict, List, Optional
 from datetime import datetime
 
-from backend.models import (
+# Imports internes au package backend
+from .models import (
     Regulation,
     Requirement,
     Product,
@@ -10,13 +11,17 @@ from backend.models import (
     RequirementImpact,
     RequirementHistoryItem,
 )
-from backend.sample_data import (
+from .sample_data import (
     get_sample_regulations,
     get_sample_components,
     get_sample_product,
     get_sample_tests,
 )
-from backend.versioning import create_history_item
+from .versioning import create_history_item
+
+# Imports des sources réelles (si tu as créé ces fichiers)
+from .sources.eurlex_client import get_eu_regulation
+from .sources.federalregister_client import search_us_regulations
 
 
 class InMemoryDataStore:
@@ -25,7 +30,7 @@ class InMemoryDataStore:
     """
 
     def __init__(self):
-        
+        # Données d'exemple chargées au démarrage
         self.regulations: Dict[str, Regulation] = {
             r.id: r for r in get_sample_regulations()
         }
@@ -39,13 +44,36 @@ class InMemoryDataStore:
         self.impacts: Dict[str, RequirementImpact] = {}
         self.history: List[RequirementHistoryItem] = []
 
-    # --- Regulations --- #
+    # --- Regulations (interne) --- #
 
     def list_regulations(self) -> List[Regulation]:
         return sorted(self.regulations.values(), key=lambda r: r.date)
 
     def get_regulation(self, reg_id: str) -> Optional[Regulation]:
         return self.regulations.get(reg_id)
+
+    # --- Import depuis des sources réelles --- #
+
+    def import_eu_regulation(self, celex_id: str) -> Regulation:
+        """
+        Importe une réglementation UE depuis EUR-Lex/Cellar via son CELEX ID.
+        Nécessite que backend/sources/eurlex_client.py soit configuré.
+        """
+        reg = get_eu_regulation(celex_id)
+        self.regulations[reg.id] = reg
+        return reg
+
+    def import_us_regulations_by_topic(
+        self, topic: str, limit: int = 5
+    ) -> List[Regulation]:
+        """
+        Importe des réglementations US depuis le Federal Register,
+        filtrées par mot-clé (topic).
+        """
+        regs = search_us_regulations(topic, limit)
+        for reg in regs:
+            self.regulations[reg.id] = reg
+        return regs
 
     # --- Requirements --- #
 
@@ -54,7 +82,9 @@ class InMemoryDataStore:
             self.requirements[r.id] = r
             self.history.append(
                 create_history_item(
-                    requirement=r, change_type="created", diff_summary="Initial extraction"
+                    requirement=r,
+                    change_type="created",
+                    diff_summary="Initial extraction",
                 )
             )
 
@@ -99,7 +129,8 @@ class InMemoryDataStore:
         if not relevant_reqs:
             return 100.0, []
 
-        non_compliant = []
+        non_compliant: List[str] = []
+
         for r in relevant_reqs:
             impact = self.impacts.get(r.id)
             if not impact:
