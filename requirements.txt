@@ -1,0 +1,5 @@
+streamlit
+pydantic
+pandas
+networkx
+python-dateutil
