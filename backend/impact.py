@@ -1,5 +1,5 @@
 # backend/impact.py
-from .schemas import RequirementImpact, Requirement
+from .schema import RequirementImpact, Requirement
 from .store import STORE
 
 

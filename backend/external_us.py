@@ -3,7 +3,7 @@ import requests
 from datetime import datetime
 from typing import List
 
-from .schemas import Regulation
+from .schema import Regulation
 
 FR_SEARCH_URL = "https://www.federalregister.gov/api/v1/documents"
 HEADERS = {

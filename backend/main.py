@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 
 from .store import STORE
-from .schemas import (
+from .schema import (
     Regulation,
     Requirement,
     RequirementImpact,
@@ -13,9 +13,9 @@ from .schemas import (
     HistoryItem,
 )
 from .nlp import extract_requirements_from_regulation
-from .impact import infer_impact
-from .external_us import search_us_regulations
-from .external_eu import fetch_eu_regulation_by_celex
+from impact import infer_impact
+from external_us import search_us_regulations
+from external_eu import fetch_eu_regulation_by_celex
 
 app = FastAPI(title="GPS Réglementaire – Renault", version="1.0")
 

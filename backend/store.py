@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from .schemas import (
+from .schema import (
     Regulation,
     Requirement,
     RequirementImpact,
@@ -13,7 +13,7 @@ from .schemas import (
 )
 
 
-class InMemoryStore:
+class InMemoryDataStore:
     def __init__(self) -> None:
         # --- Réglementations noyau (Renault) --- #
         self.regulations: Dict[str, Regulation] = {}
@@ -197,4 +197,4 @@ class InMemoryStore:
 
 
 # Singleton global pour l’app
-STORE = InMemoryStore()
+STORE = InMemoryDataStore()

@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import List
 
-from .schemas import Regulation, Requirement
+from .schema import Regulation, Requirement
 
 
 def extract_requirements_from_regulation(reg: Regulation, start_index: int = 1) -> List[Requirement]:

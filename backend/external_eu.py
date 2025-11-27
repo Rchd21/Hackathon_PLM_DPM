@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import Optional
 
-from .schemas import Regulation
+from .schema import Regulation
 
 
 def fetch_eu_regulation_by_celex(celex_id: str) -> Optional[Regulation]:
